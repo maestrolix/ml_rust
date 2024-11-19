@@ -7,28 +7,28 @@ use crate::{
     models::DetectedFaceOutput,
 };
 
+#[derive(Debug, Clone)]
 pub struct FaceDetector {
-    session: Session,
+    pub model_path: String,
+    pub model_name: String,
 }
 
 impl FaceDetector {
-    pub fn new(model_path: &str) -> Self {
-        let session = Session::builder()
-            .unwrap()
-            .with_optimization_level(GraphOptimizationLevel::Disable)
-            .unwrap()
-            .commit_from_file(model_path)
-            .unwrap();
-
-        FaceDetector { session }
+    pub fn new(path: String, name: String) -> Self {
+        FaceDetector {
+            model_path: path,
+            model_name: name,
+        }
     }
 
     pub fn predict(&self, image: &DynamicImage) -> Vec<DetectedFaceOutput> {
+        let session = self.load_session();
+
         let resized_image = resize(image, 640, 640);
 
         let image_tensor = Self::get_tensor(&resized_image.to_rgba32f());
 
-        let outputs = self.session.run(inputs![image_tensor].unwrap()).unwrap();
+        let outputs = session.run(inputs![image_tensor].unwrap()).unwrap();
 
         post_processing(outputs, 0.5, image)
     }
@@ -42,5 +42,14 @@ impl FaceDetector {
         );
 
         return input;
+    }
+
+    fn load_session(&self) -> Session {
+        Session::builder()
+            .unwrap()
+            .with_optimization_level(GraphOptimizationLevel::Disable)
+            .unwrap()
+            .commit_from_file(&self.model_path)
+            .unwrap()
     }
 }

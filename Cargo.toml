@@ -25,3 +25,4 @@ axum_typed_multipart = "0.11.1"
 # Search models
 tokenizers = { version = "0.19.1", features = ["hf-hub", "http"] }
 itertools = "0.13.0"
+toml = "0.8.19"

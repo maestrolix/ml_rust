@@ -7,7 +7,7 @@ use crate::models::{
 };
 
 use axum::{
-    extract::{DefaultBodyLimit, Query},
+    extract::{DefaultBodyLimit, FromRef, Query, State},
     routing::post,
     Json, Router,
 };
@@ -18,7 +18,62 @@ use std::io::Cursor;
 use utoipa::OpenApi;
 use utoipa_swagger_ui::SwaggerUi;
 
-pub fn create_app() -> Router {
+#[derive(Clone)]
+pub struct AppState {
+    pub detecrot: FaceDetector,
+    pub recognizer: FaceRecognizer,
+    pub textual: ImageTextualize,
+    pub visual: ImageVisualize,
+}
+
+impl AppState {
+    pub fn new(config: crate::config::Config) -> Self {
+        AppState {
+            detecrot: FaceDetector::new(
+                config.model.facial_processing.detector.model_path,
+                config.model.facial_processing.detector.model_name,
+            ),
+            recognizer: FaceRecognizer::new(
+                config.model.facial_processing.recognizer.model_path,
+                config.model.facial_processing.recognizer.model_name,
+            ),
+            textual: ImageTextualize::new(
+                config.model.search.textual.model_path,
+                config.model.search.textual.model_name,
+            ),
+            visual: ImageVisualize::new(
+                config.model.search.visual.model_path,
+                config.model.search.visual.model_name,
+            ),
+        }
+    }
+}
+
+impl FromRef<AppState> for FaceDetector {
+    fn from_ref(app_state: &AppState) -> FaceDetector {
+        app_state.detecrot.clone()
+    }
+}
+
+impl FromRef<AppState> for FaceRecognizer {
+    fn from_ref(app_state: &AppState) -> FaceRecognizer {
+        app_state.recognizer.clone()
+    }
+}
+
+impl FromRef<AppState> for ImageTextualize {
+    fn from_ref(app_state: &AppState) -> ImageTextualize {
+        app_state.textual.clone()
+    }
+}
+
+impl FromRef<AppState> for ImageVisualize {
+    fn from_ref(app_state: &AppState) -> ImageVisualize {
+        app_state.visual.clone()
+    }
+}
+
+pub fn create_app(swagger_path: String, body_limit: u32, config: crate::config::Config) -> Router {
     #[derive(OpenApi)]
     #[openapi(
         paths(
@@ -38,13 +93,16 @@ pub fn create_app() -> Router {
     )]
     struct ApiDoc;
 
+    let state = AppState::new(config);
+
     Router::new()
-        .merge(SwaggerUi::new("/swagger-ui").url("/api-docs/openapi.json", ApiDoc::openapi()))
+        .merge(SwaggerUi::new(swagger_path).url("/api-docs/openapi.json", ApiDoc::openapi()))
         .route("/detecting-faces", post(detecting_faces))
         .route("/recognition-faces", post(recognition_faces))
         .route("/clip-textual", post(clip_textual))
         .route("/clip-visual", post(clip_visual))
-        .layer(DefaultBodyLimit::max(100000000))
+        .with_state(state)
+        .layer(DefaultBodyLimit::max(body_limit as _))
 }
 
 #[utoipa::path(
@@ -57,14 +115,10 @@ pub fn create_app() -> Router {
     )
 )]
 pub async fn detecting_faces(
+    State(detector): State<FaceDetector>,
     TypedMultipart(image_form): TypedMultipart<ImageForm>,
 ) -> Json<Vec<DetectedFaceOutput>> {
     let image = dyn_image_from_bytes(image_form.image.contents.as_bytes());
-
-    let detector = FaceDetector::new(
-        "/home/stepan/rust/projects/recognition_all/ml_rust/models/antelopev2/detection/model.onnx",
-    );
-
     let faces = detector.predict(&image);
 
     Json(faces)
@@ -80,18 +134,13 @@ pub async fn detecting_faces(
     )
 )]
 pub async fn recognition_faces(
+    State(detector): State<FaceDetector>,
+    State(recognizer): State<FaceRecognizer>,
     TypedMultipart(image_form): TypedMultipart<ImageForm>,
 ) -> Json<Vec<RecognizedFaceOutput>> {
     let image = dyn_image_from_bytes(image_form.image.contents.as_bytes());
 
-    let detector = FaceDetector::new(
-        "/home/stepan/rust/projects/recognition_all/ml_rust/models/antelopev2/detection/model.onnx",
-    );
     let faces = detector.predict(&image);
-
-    let recognizer = FaceRecognizer::new(
-        "/home/stepan/rust/projects/recognition_all/ml_rust/models/antelopev2/recognition/model.onnx"
-    );
 
     Json(
         faces
@@ -111,12 +160,10 @@ pub async fn recognition_faces(
         (status = 200, description = "Информация обработана успешно", body = Vec<f32>)
     )
 )]
-pub async fn clip_textual(Query(text_query): Query<TextQuery>) -> Json<Vec<f32>> {
-    let textualize = ImageTextualize::new(
-        "/home/stepan/rust/projects/recognition_all/recognition/models/clip/text/model.onnx",
-        "sentence-transformers/clip-ViT-B-32-multilingual-v1",
-    );
-
+pub async fn clip_textual(
+    State(textualize): State<ImageTextualize>,
+    Query(text_query): Query<TextQuery>,
+) -> Json<Vec<f32>> {
     Json(textualize.predict(&text_query.text))
 }
 
@@ -129,12 +176,11 @@ pub async fn clip_textual(Query(text_query): Query<TextQuery>) -> Json<Vec<f32>>
         (content_type="multipart/form-data", status = 200, description = "Информация обработана успешно", body = Vec<f32>)
     )
 )]
-pub async fn clip_visual(TypedMultipart(image_form): TypedMultipart<ImageForm>) -> Json<Vec<f32>> {
+pub async fn clip_visual(
+    State(visualize): State<ImageVisualize>,
+    TypedMultipart(image_form): TypedMultipart<ImageForm>,
+) -> Json<Vec<f32>> {
     let image = dyn_image_from_bytes(image_form.image.contents.as_bytes());
-
-    let visualize = ImageVisualize::new(
-        "/home/stepan/rust/projects/recognition_all/recognition/models/clip/image/model.onnx",
-    );
 
     Json(visualize.predict(image))
 }

@@ -3,26 +3,24 @@ use ndarray::Array;
 use ort::{inputs, GraphOptimizationLevel, Session, SessionOutputs};
 use tokenizers::{Encoding, Tokenizer};
 
+#[derive(Debug, Clone)]
 pub struct ImageTextualize {
-    session: Session,
-    tokenizer: Tokenizer,
+    pub model_path: String,
+    pub model_name: String,
 }
 
 impl ImageTextualize {
-    pub fn new(model_path: &str, text_model_for_tokenizer: &str) -> Self {
-        let tokenizer = Self::create_tokenizer(text_model_for_tokenizer);
-        let session = Session::builder()
-            .unwrap()
-            .with_optimization_level(GraphOptimizationLevel::Disable)
-            .unwrap()
-            .commit_from_file(model_path)
-            .unwrap();
-
-        ImageTextualize { session, tokenizer }
+    pub fn new(path: String, text_model_for_tokenizer: String) -> Self {
+        ImageTextualize {
+            model_path: path,
+            model_name: text_model_for_tokenizer,
+        }
     }
 
     pub fn predict(&self, text: &str) -> Vec<f32> {
-        let preprocessed = self.tokenizer.encode(text, true).unwrap();
+        let session = self.load_session();
+        let tokenizer = Self::create_tokenizer(&self.model_name);
+        let preprocessed = tokenizer.encode(text, true).unwrap();
 
         let binding = vec![text.to_string()];
         let input_ids_vector = Self::get_input_ids_vector(preprocessed.clone(), &binding);
@@ -30,8 +28,7 @@ impl ImageTextualize {
         let binding = vec![text.to_string()];
         let attention_mask_vector = Self::get_attention_mask_vector(preprocessed, &binding);
 
-        let outputs = self
-            .session
+        let outputs = session
             .run(inputs![input_ids_vector, attention_mask_vector].unwrap())
             .unwrap();
 
@@ -79,6 +76,15 @@ impl ImageTextualize {
         let ids_shape = (text.len(), input_ids_vector.len() / text.len());
 
         Array::from_shape_vec(ids_shape, input_ids_vector).unwrap()
+    }
+
+    fn load_session(&self) -> Session {
+        Session::builder()
+            .unwrap()
+            .with_optimization_level(GraphOptimizationLevel::Disable)
+            .unwrap()
+            .commit_from_file(&self.model_path)
+            .unwrap()
     }
 }
 

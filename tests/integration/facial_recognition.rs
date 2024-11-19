@@ -29,10 +29,13 @@ pub fn cosine_similarity(vec1: &[f32], vec2: &[f32]) -> f32 {
 #[test]
 fn check_similarity() {
     let detector = FaceDetector::new(
-        "/home/stepan/rust/projects/recognition_all/ml_rust/models/antelopev2/detection/model.onnx",
+        "/home/stepan/rust/projects/recognition_all/ml_rust/models/antelopev2/detection/model.onnx"
+            .to_string(),
+        "".to_string(),
     );
     let recognizer = FaceRecognizer::new(
-        "/home/stepan/rust/projects/recognition_all/ml_rust/models/antelopev2/recognition/model.onnx",
+        "/home/stepan/rust/projects/recognition_all/ml_rust/models/antelopev2/recognition/model.onnx".to_string(),
+        "".to_string(),
     );
     let (face1, face2, face3) = (
         get_face_embedding(&detector, &recognizer, "test_face_6.jpg"),
