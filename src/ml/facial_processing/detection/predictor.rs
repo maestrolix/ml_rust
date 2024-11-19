@@ -1,13 +1,14 @@
-use image::{DynamicImage, GenericImageView, Rgba32FImage};
+use image::{DynamicImage, Rgba32FImage};
 use ndarray::Array;
 use ort::{inputs, GraphOptimizationLevel, Session};
 
-use crate::ml::facial_detection::post_processing::DetectionFaces;
-
-use crate::ml::transforms::resize;
+use crate::{
+    ml::facial_processing::{detection::post_processing::post_processing, transforms::resize},
+    models::DetectedFaceOutput,
+};
 
 pub struct FaceDetector {
-    pub session: Session,
+    session: Session,
 }
 
 impl FaceDetector {
@@ -22,22 +23,17 @@ impl FaceDetector {
         FaceDetector { session }
     }
 
-    pub fn predict(&self, image: &DynamicImage) -> DetectionFaces {
-        // Некорректное изменение размера изображения (обрезает)
-        let resized_image = image.resize_to_fill(640, 640, image::imageops::FilterType::Triangle);
-
-        // let resized_image = resize(image, 640, 640);
-
-        dbg!(&resized_image.dimensions());
+    pub fn predict(&self, image: &DynamicImage) -> Vec<DetectedFaceOutput> {
+        let resized_image = resize(image, 640, 640);
 
         let image_tensor = Self::get_tensor(&resized_image.to_rgba32f());
 
         let outputs = self.session.run(inputs![image_tensor].unwrap()).unwrap();
 
-        DetectionFaces::new(outputs, image, 0.5)
+        post_processing(outputs, 0.5, image)
     }
 
-    pub fn get_tensor(image: &Rgba32FImage) -> ndarray::Array<f32, ndarray::Dim<[usize; 4]>> {
+    fn get_tensor(image: &Rgba32FImage) -> ndarray::Array<f32, ndarray::Dim<[usize; 4]>> {
         let shape = image.dimensions();
 
         let input = Array::from_shape_fn(

@@ -1,6 +1,6 @@
 use std::ops::Mul;
 
-use image::{DynamicImage, GenericImageView, Pixel, Rgb, Rgba32FImage};
+use image::{DynamicImage, Rgba32FImage};
 use nalgebra::Matrix3;
 use nalgebra::{ArrayStorage, Matrix1x2, Matrix2, Matrix2x1, Matrix3x1};
 
@@ -35,8 +35,8 @@ pub fn warp_into(input: &Rgba32FImage, matrix: Matrix3<f32>, output: &mut Rgba32
     }
 }
 
-/// The Kabsch-Umeyama algorithm is a method for finding the optimal translation, rotation,
-/// and scaling that aligns two sets of points with minimum root-mean-square deviation (RMSD).
+/// Алгоритм `Кабша-Умеямы` - это метод нахождения оптимального перемещения, поворота
+/// и масштабирования, который выравнивает два набора точек с минимальным среднеквадратичным отклонением (RMSD).
 pub fn umeyama<const R: usize>(src: &[(f32, f32); R], dst: &[(f32, f32); R]) -> Matrix3<f32> {
     let src_x_sum: f32 = src.iter().map(|v| v.0).sum();
     let src_x_mean = src_x_sum / (R as f32);
@@ -77,7 +77,6 @@ pub fn umeyama<const R: usize>(src: &[(f32, f32); R], dst: &[(f32, f32); R]) -> 
     if rank == 0 {
         panic!("Matrix rank is 0.");
     } else if rank == 2 - 1 {
-        //
         if u.determinant() * v.determinant() > 0.0 {
             u.mul_to(&v, &mut t);
         } else {
@@ -127,69 +126,26 @@ pub fn umeyama<const R: usize>(src: &[(f32, f32); R], dst: &[(f32, f32); R]) -> 
     return tt;
 }
 
+/// Изменяет размер изображения с сохранением соотношения сторон,
+/// компенсирует широту или высоту изображения черными пикселями.
+/// На выходе получаем изображение `width`*`height`
 pub fn resize(image: &DynamicImage, width: u32, height: u32) -> DynamicImage {
-    let raw_image = image.resize(width, height, image::imageops::FilterType::Triangle);
-    dbg!(&raw_image.dimensions());
-    let input = raw_image.to_rgba32f();
+    let input = image
+        .resize(width, height, image::imageops::FilterType::Triangle)
+        .to_rgba32f();
+
     let mut output = Rgba32FImage::new(width, height);
 
     for out_row in 0..width {
         for out_col in 0..height {
             match input.get_pixel_checked(out_row as _, out_col as _) {
                 Some(pixel) => output.put_pixel(out_row, out_col, *pixel),
-                None => output.put_pixel(out_row, out_col, image::Rgba([255., 255., 255., 1.])),
+                None => output.put_pixel(out_row, out_col, image::Rgba([0., 0., 0., 1.])),
             }
         }
     }
 
-    // let dyn_img = DynamicImage::from(output.clone()).to_rgb8();
-    // dyn_img.save("test_resize.jpg").unwrap();
-
-    DynamicImage::from(output.clone())
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    const SRC: [(f32, f32); 5] = [
-        (491.7426, 321.8467),
-        (541.7967, 332.23264),
-        (507.47015, 366.4012),
-        (485.72678, 369.63214),
-        (533.7206, 378.40567),
-    ];
-
-    const DST: [(f32, f32); 5] = [
-        (38.2946f32, 51.6963f32),
-        (73.5318f32, 51.5014f32),
-        (56.0252f32, 71.7366f32),
-        (41.5493f32, 92.3655f32),
-        (70.7299f32, 92.2041f32),
-    ];
-
-    #[test]
-    fn estimate() {
-        let result = umeyama(&SRC, &DST);
-
-        const R: nalgebra::Matrix<
-            f32,
-            nalgebra::Const<3>,
-            nalgebra::Const<3>,
-            ArrayStorage<f32, 3, 3>,
-        > = Matrix3::<f32>::new(
-            0.7000762f32,
-            0.12366913f32,
-            -346.2191f32,
-            -0.12366913f32,
-            0.7000762f32,
-            -112.38885f32,
-            0f32,
-            0f32,
-            1f32,
-        );
-
-        assert_eq!(result, R);
-    }
+    DynamicImage::from(output)
 }
 
 pub fn crop_face(image: &Rgba32FImage, landmarks: &[(f32, f32); 5], size: u32) -> Rgba32FImage {
@@ -198,12 +154,6 @@ pub fn crop_face(image: &Rgba32FImage, landmarks: &[(f32, f32); 5], size: u32) -
     let mut output = Rgba32FImage::new(size, size);
     warp_into(image, m, &mut output);
     output
-}
-
-pub fn estimate_norm(landmarks: &[(f32, f32); 5]) -> Matrix3<f32> {
-    let m = umeyama(&landmarks, &ARCFACE_DST);
-
-    m
 }
 
 const ARCFACE_DST: [(f32, f32); 5] = [
