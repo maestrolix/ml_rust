@@ -12,7 +12,9 @@ fn get_faces(detector: &FaceDetector, image_name: &str) -> Vec<DetectedFaceOutpu
 #[test]
 fn check_score_and_len() {
     let detector = FaceDetector::new(
-        "/home/stepan/rust/projects/recognition_all/ml_rust/models/antelopev2/detection/model.onnx",
+        "/home/stepan/rust/projects/recognition_all/ml_rust/models/antelopev2/detection/model.onnx"
+            .to_string(),
+        "".to_string(),
     );
 
     let faces = get_faces(&detector, "test_face_1.jpg");

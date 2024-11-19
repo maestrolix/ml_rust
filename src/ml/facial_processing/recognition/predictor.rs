@@ -4,20 +4,18 @@ use ort::{inputs, GraphOptimizationLevel, Session};
 
 use crate::{ml::facial_processing::transforms::crop_face, models::DetectedFaceOutput};
 
+#[derive(Debug, Clone)]
 pub struct FaceRecognizer {
-    session: Session,
+    pub model_path: String,
+    pub model_name: String,
 }
 
 impl FaceRecognizer {
-    pub fn new(model_path: &str) -> Self {
-        let session = Session::builder()
-            .unwrap()
-            .with_optimization_level(GraphOptimizationLevel::Disable)
-            .unwrap()
-            .commit_from_file(model_path)
-            .unwrap();
-
-        FaceRecognizer { session }
+    pub fn new(path: String, name: String) -> Self {
+        FaceRecognizer {
+            model_path: path,
+            model_name: name,
+        }
     }
 
     pub fn predict(
@@ -39,7 +37,8 @@ impl FaceRecognizer {
         &self,
         image: ndarray::Array<f32, ndarray::Dim<[usize; 4]>>,
     ) -> [f32; 512] {
-        let outputs = self.session.run(inputs![image].unwrap()).unwrap();
+        let session = self.load_session();
+        let outputs = session.run(inputs![image].unwrap()).unwrap();
 
         let embedding = outputs[0].try_extract_tensor().unwrap();
 
@@ -55,5 +54,14 @@ impl FaceRecognizer {
         );
 
         return input;
+    }
+
+    fn load_session(&self) -> Session {
+        Session::builder()
+            .unwrap()
+            .with_optimization_level(GraphOptimizationLevel::Disable)
+            .unwrap()
+            .commit_from_file(&self.model_path)
+            .unwrap()
     }
 }

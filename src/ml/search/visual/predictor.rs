@@ -2,30 +2,30 @@ use image::{imageops::FilterType, DynamicImage, RgbImage};
 use itertools::Itertools;
 use ort::{inputs, GraphOptimizationLevel, Session};
 
+#[derive(Debug, Clone)]
 pub struct ImageVisualize {
-    pub session: Session,
+    pub model_path: String,
+    pub model_name: String,
 }
 
 impl ImageVisualize {
-    pub fn new(model_path: &str) -> Self {
-        let session = Session::builder()
-            .unwrap()
-            .with_optimization_level(GraphOptimizationLevel::Disable)
-            .unwrap()
-            .commit_from_file(model_path)
-            .unwrap();
-
-        ImageVisualize { session }
+    pub fn new(path: String, name: String) -> Self {
+        ImageVisualize {
+            model_path: path,
+            model_name: name,
+        }
     }
 
     pub fn predict(&self, dyn_image: DynamicImage) -> Vec<f32> {
+        let session = self.load_session();
+
         let tensor = Self::get_tensor(
             &dyn_image
                 .resize_to_fill(224, 224, FilterType::CatmullRom)
                 .to_rgb8(),
         );
 
-        let outputs = self.session.run(inputs![tensor].unwrap()).unwrap();
+        let outputs = session.run(inputs![tensor].unwrap()).unwrap();
         let tensor = outputs[0].try_extract_tensor().unwrap();
         let embeddings = tensor.view();
 
@@ -56,5 +56,14 @@ impl ImageVisualize {
         }
 
         pixels
+    }
+
+    fn load_session(&self) -> Session {
+        Session::builder()
+            .unwrap()
+            .with_optimization_level(GraphOptimizationLevel::Disable)
+            .unwrap()
+            .commit_from_file(&self.model_path)
+            .unwrap()
     }
 }
