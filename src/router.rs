@@ -5,6 +5,7 @@ use crate::ml::{
 use crate::models::{
     DetectedFaceOutput, ImageForm, ImageFormUtopia, RecognizedFaceOutput, TextQuery,
 };
+use crate::services::{facial_processing as fp, search};
 
 use axum::{
     extract::{DefaultBodyLimit, FromRef, Query, State},
@@ -12,9 +13,6 @@ use axum::{
     Json, Router,
 };
 use axum_typed_multipart::TypedMultipart;
-use image::ImageReader;
-use image::{DynamicImage, EncodableLayout};
-use std::io::Cursor;
 use utoipa::OpenApi;
 use utoipa_swagger_ui::SwaggerUi;
 
@@ -118,10 +116,7 @@ pub async fn detecting_faces(
     State(detector): State<FaceDetector>,
     TypedMultipart(image_form): TypedMultipart<ImageForm>,
 ) -> Json<Vec<DetectedFaceOutput>> {
-    let image = dyn_image_from_bytes(image_form.image.contents.as_bytes());
-    let faces = detector.predict(&image);
-
-    Json(faces)
+    Json(fp::detecting_faces(detector, image_form).await)
 }
 
 #[utoipa::path(
@@ -138,17 +133,7 @@ pub async fn recognition_faces(
     State(recognizer): State<FaceRecognizer>,
     TypedMultipart(image_form): TypedMultipart<ImageForm>,
 ) -> Json<Vec<RecognizedFaceOutput>> {
-    let image = dyn_image_from_bytes(image_form.image.contents.as_bytes());
-
-    let faces = detector.predict(&image);
-
-    Json(
-        faces
-            .iter()
-            .zip(recognizer.predict(&image, &faces))
-            .map(|(face, emb)| RecognizedFaceOutput::from_mergers(face, emb.to_vec()))
-            .collect(),
-    )
+    Json(fp::recognition_faces(detector, recognizer, image_form).await)
 }
 
 #[utoipa::path(
@@ -164,7 +149,7 @@ pub async fn clip_textual(
     State(textualize): State<ImageTextualize>,
     Query(text_query): Query<TextQuery>,
 ) -> Json<Vec<f32>> {
-    Json(textualize.predict(&text_query.text))
+    Json(search::clip_textual(textualize, text_query).await)
 }
 
 #[utoipa::path(
@@ -180,15 +165,5 @@ pub async fn clip_visual(
     State(visualize): State<ImageVisualize>,
     TypedMultipart(image_form): TypedMultipart<ImageForm>,
 ) -> Json<Vec<f32>> {
-    let image = dyn_image_from_bytes(image_form.image.contents.as_bytes());
-
-    Json(visualize.predict(image))
-}
-
-fn dyn_image_from_bytes(image_bytes: &[u8]) -> DynamicImage {
-    ImageReader::new(Cursor::new(image_bytes))
-        .with_guessed_format()
-        .unwrap()
-        .decode()
-        .unwrap()
+    Json(search::clip_visual(visualize, image_form).await)
 }
