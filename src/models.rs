@@ -44,3 +44,29 @@ pub struct ImageFormUtopia {
 pub struct TextQuery {
     pub text: String,
 }
+
+#[derive(Debug, ToSchema)]
+pub struct Span {
+    pub start: f32, // Пока что в секундах
+    pub end: f32,   // Пока что в секундах
+    pub max_score: f32,
+}
+
+#[derive(Debug, ToSchema)]
+pub struct VideoFacialRecognitionOutput {
+    pub spans: Vec<Span>,
+}
+
+#[derive(TryFromMultipart, Debug)]
+pub struct VideoForm {
+    #[form_data(limit = "unlimited")]
+    pub search_face: FieldData<Bytes>,
+    #[form_data(limit = "unlimited")]
+    pub video: FieldData<Bytes>,
+}
+
+#[derive(ToSchema, Debug)]
+pub struct VideoFormUtopia {
+    pub search_face: Vec<u8>,
+    pub video: Vec<u8>,
+}
