@@ -1,11 +1,15 @@
-use crate::ml::{
-    facial_processing::{FaceDetector, FaceRecognizer},
-    search::{ImageTextualize, ImageVisualize},
-};
 use crate::models::{
-    DetectedFaceOutput, ImageForm, ImageFormUtopia, RecognizedFaceOutput, TextQuery,
+    DetectedFaceOutput, ImageForm, ImageFormUtopia, RecognizedFaceOutput, Span, TextQuery,
+    VideoFacialRecognitionOutput, VideoForm, VideoFormUtopia,
 };
 use crate::services::{facial_processing as fp, search};
+use crate::{
+    ml::{
+        facial_processing::{FaceDetector, FaceRecognizer},
+        search::{ImageTextualize, ImageVisualize},
+    },
+    utils::dyn_image_from_bytes,
+};
 
 use axum::{
     extract::{DefaultBodyLimit, FromRef, Query, State},
@@ -13,6 +17,7 @@ use axum::{
     Json, Router,
 };
 use axum_typed_multipart::TypedMultipart;
+use image::EncodableLayout;
 use utoipa::OpenApi;
 use utoipa_swagger_ui::SwaggerUi;
 
@@ -77,12 +82,21 @@ pub fn create_app(swagger_path: String, body_limit: u32, config: crate::config::
         paths(
             detecting_faces,
             recognition_faces,
+            video_facial_recognition,
 
             clip_textual,
             clip_visual,
         ),
         components(
-            schemas(ImageFormUtopia, DetectedFaceOutput, RecognizedFaceOutput, TextQuery)
+            schemas(
+                ImageFormUtopia,
+                DetectedFaceOutput,
+                RecognizedFaceOutput,
+                TextQuery,
+                VideoFormUtopia,
+                VideoFacialRecognitionOutput,
+                Span
+            )
         ),
         tags(
             (name = "face-processing", description = "Работа с лицами"),
@@ -97,6 +111,7 @@ pub fn create_app(swagger_path: String, body_limit: u32, config: crate::config::
         .merge(SwaggerUi::new(swagger_path).url("/api-docs/openapi.json", ApiDoc::openapi()))
         .route("/detecting-faces", post(detecting_faces))
         .route("/recognition-faces", post(recognition_faces))
+        .route("/video-facial-recognition", post(video_facial_recognition))
         .route("/clip-textual", post(clip_textual))
         .route("/clip-visual", post(clip_visual))
         .with_state(state)
@@ -116,7 +131,13 @@ pub async fn detecting_faces(
     State(detector): State<FaceDetector>,
     TypedMultipart(image_form): TypedMultipart<ImageForm>,
 ) -> Json<Vec<DetectedFaceOutput>> {
-    Json(fp::detecting_faces(detector, image_form).await)
+    Json(
+        fp::detecting_faces(
+            detector,
+            &dyn_image_from_bytes(image_form.image.contents.as_bytes()),
+        )
+        .await,
+    )
 }
 
 #[utoipa::path(
@@ -133,7 +154,44 @@ pub async fn recognition_faces(
     State(recognizer): State<FaceRecognizer>,
     TypedMultipart(image_form): TypedMultipart<ImageForm>,
 ) -> Json<Vec<RecognizedFaceOutput>> {
-    Json(fp::recognition_faces(detector, recognizer, image_form).await)
+    Json(
+        fp::recognition_faces(
+            &detector,
+            &recognizer,
+            &dyn_image_from_bytes(image_form.image.contents.as_bytes()),
+        )
+        .await,
+    )
+}
+
+#[utoipa::path(
+    post,
+    path = "/video-facial-recognition",
+    tag = "face-processing",
+    request_body(content_type="multipart/form-data", content=VideoFormUtopia),
+    responses(
+        (
+            content_type="multipart/form-data",
+            status = 200,
+            description = "Информация обработана успешно",
+            body = VideoFacialRecognitionOutput
+        )
+    )
+)]
+pub async fn video_facial_recognition(
+    State(detector): State<FaceDetector>,
+    State(recognizer): State<FaceRecognizer>,
+    TypedMultipart(video_form): TypedMultipart<VideoForm>,
+) -> Json<VideoFacialRecognitionOutput> {
+    Json(
+        fp::video_facial_recognition(
+            &detector,
+            &recognizer,
+            video_form.video.contents.as_bytes(),
+            &dyn_image_from_bytes(video_form.search_face.contents.as_bytes()),
+        )
+        .await,
+    )
 }
 
 #[utoipa::path(
@@ -165,5 +223,5 @@ pub async fn clip_visual(
     State(visualize): State<ImageVisualize>,
     TypedMultipart(image_form): TypedMultipart<ImageForm>,
 ) -> Json<Vec<f32>> {
-    Json(search::clip_visual(visualize, image_form).await)
+    Json(search::clip_visual(visualize, image_form.image.contents.as_bytes()).await)
 }

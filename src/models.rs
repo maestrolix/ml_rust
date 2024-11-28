@@ -44,3 +44,35 @@ pub struct ImageFormUtopia {
 pub struct TextQuery {
     pub text: String,
 }
+
+#[derive(Debug, ToSchema, Deserialize, Serialize)]
+pub struct Span {
+    /// Начало интервала попадания лица (в секундах)
+    pub start: f32,
+    /// Конец интервала попадания лица (в секундах)
+    pub end: f32,
+    /// Максимальное совпадение лица в интервале
+    pub max_score: f32,
+}
+
+#[derive(Debug, ToSchema, Deserialize, Serialize)]
+pub struct VideoFacialRecognitionOutput {
+    /// Интервалы попадания лица в видео
+    pub spans: Vec<Span>,
+}
+
+#[derive(TryFromMultipart, Debug)]
+pub struct VideoForm {
+    #[form_data(limit = "unlimited")]
+    pub search_face: FieldData<Bytes>,
+    #[form_data(limit = "unlimited")]
+    pub video: FieldData<Bytes>,
+}
+
+#[derive(ToSchema, Debug)]
+pub struct VideoFormUtopia {
+    /// Лицо искомого человека
+    pub search_face: Vec<u8>,
+    /// Видео в рамках которого осуществляется поиск
+    pub video: Vec<u8>,
+}

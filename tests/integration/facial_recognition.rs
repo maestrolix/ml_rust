@@ -1,5 +1,5 @@
 use ml_rust::ml::facial_processing::{FaceDetector, FaceRecognizer};
-use rayon::prelude::*;
+use ml_rust::utils::cosine_similarity;
 
 const TEST_DATA_DIR: &str = "./tests/assets/with_faces";
 
@@ -12,18 +12,6 @@ fn get_face_embedding(
     let faces = detector.predict(&image);
     let embeddings = recognizer.predict(&image, &faces);
     embeddings[0]
-}
-
-pub fn cosine_similarity(vec1: &[f32], vec2: &[f32]) -> f32 {
-    let dot_product: f32 = vec1
-        .par_iter()
-        .zip(vec2.par_iter())
-        .map(|(a, b)| a * b)
-        .sum();
-
-    let magnitude1: f32 = vec1.par_iter().map(|x| x.powi(2)).sum::<f32>().sqrt();
-    let magnitude2: f32 = vec2.par_iter().map(|x| x.powi(2)).sum::<f32>().sqrt();
-    dot_product / (magnitude1 * magnitude2)
 }
 
 #[test]
