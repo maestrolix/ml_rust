@@ -3,6 +3,7 @@ use rayon::prelude::*;
 use std::io::Cursor;
 
 pub fn dyn_image_from_bytes(image_bytes: &[u8]) -> DynamicImage {
+    // Данная функция является узким горлышком всей обработки
     ImageReader::new(Cursor::new(image_bytes))
         .with_guessed_format()
         .unwrap()
